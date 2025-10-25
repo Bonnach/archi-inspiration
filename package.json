@@ -11,6 +11,7 @@
     "db:reset": "prisma db push --force-reset && npm run db:seed"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.917.0",
     "@headlessui/react": "^2.2.9",
     "@hookform/resolvers": "^5.2.2",
     "@next-auth/prisma-adapter": "^1.0.7",
