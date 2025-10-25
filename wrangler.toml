@@ -1,0 +1,7 @@
+name = "archi-inspiration"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "archi-match-db"
+database_id = "d74d4c80-0af7-4a7c-8e57-4ea6d8668040"
