@@ -31,6 +31,7 @@ export default function QuestionnairePage({ params }: QuestionnairePageProps) {
   const { sessionId } = React.use(params)
   
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([])
+  const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([])
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -43,12 +44,31 @@ export default function QuestionnairePage({ params }: QuestionnairePageProps) {
 
   const loadQuestionnaire = async () => {
     try {
-      // Pour la démo, nous utiliserons l'architecte démo
+      // Charger la session pour récupérer les pièces sélectionnées
+      const sessionResponse = await fetch(`/api/client-sessions/${sessionId}`)
+      const sessionData = await sessionResponse.json()
+      
+      if (!sessionResponse.ok) {
+        console.error('Erreur session:', sessionData.error)
+        return
+      }
+
+      const selectedRooms = sessionData.session.selectedRoomTypes 
+        ? JSON.parse(sessionData.session.selectedRoomTypes)
+        : []
+      
+      setSelectedRoomIds(selectedRooms)
+
+      // Charger tous les types de pièces
       const response = await fetch(`/api/room-types?architectId=demo-architect-id`)
       const data = await response.json()
       
       if (response.ok) {
-        setRoomTypes(data.roomTypes)
+        // Filtrer pour ne garder que les pièces sélectionnées
+        const filteredRoomTypes = data.roomTypes.filter((room: RoomType) => 
+          selectedRooms.includes(room.id)
+        )
+        setRoomTypes(filteredRoomTypes)
       } else {
         console.error('Erreur:', data.error)
       }
@@ -141,7 +161,7 @@ export default function QuestionnairePage({ params }: QuestionnairePageProps) {
                 className={`w-full p-4 text-left rounded-lg border-2 transition-colors ${
                   answers[currentQuestion.id] === option
                     ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                    : 'border-gray-200 hover:border-gray-300 bg-white text-gray-900'
                 }`}
               >
                 {option}
@@ -172,7 +192,7 @@ export default function QuestionnairePage({ params }: QuestionnairePageProps) {
                   className={`w-full p-4 text-left rounded-lg border-2 transition-colors flex items-center ${
                     isSelected
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                      : 'border-gray-200 hover:border-gray-300 bg-white text-gray-900'
                   }`}
                 >
                   <div className={`w-5 h-5 rounded border-2 mr-3 flex items-center justify-center ${
@@ -191,7 +211,7 @@ export default function QuestionnairePage({ params }: QuestionnairePageProps) {
         return (
           <input
             type="text"
-            className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none"
+            className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none text-gray-900 placeholder:text-gray-400"
             placeholder="Votre réponse..."
             value={answers[currentQuestion.id] || ''}
             onChange={(e) => handleAnswer(currentQuestion.id, e.target.value)}

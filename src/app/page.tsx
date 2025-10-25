@@ -35,9 +35,9 @@ export default function HomePage() {
       const data = await response.json()
 
       if (response.ok) {
-        // Rediriger vers le questionnaire
-        router.push(`/questionnaire/${data.session.id}`)
-      } else {
+        // Rediriger vers les informations générales
+        router.push(`/general-info/${data.session.id}`)
+      } else{
         alert(data.error || 'Une erreur est survenue')
       }
     } catch (error) {
@@ -84,7 +84,7 @@ export default function HomePage() {
                     <input
                       type="text"
                       required
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors text-gray-900 placeholder:text-gray-400"
                       placeholder="Votre prénom"
                       value={formData.firstName}
                       onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
@@ -101,7 +101,7 @@ export default function HomePage() {
                     <input
                       type="text"
                       required
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors text-gray-900 placeholder:text-gray-400"
                       placeholder="Votre nom"
                       value={formData.lastName}
                       onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
@@ -117,7 +117,7 @@ export default function HomePage() {
                 <input
                   type="email"
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors text-gray-900 placeholder:text-gray-400"
                   placeholder="votre@email.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}

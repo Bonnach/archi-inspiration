@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const architectId = searchParams.get('architectId')
+    const includeChildren = searchParams.get('includeChildren') === 'true'
 
     if (!architectId) {
       return NextResponse.json(
@@ -24,13 +25,10 @@ export async function GET(request: NextRequest) {
           where: { active: true },
           orderBy: { displayOrder: 'asc' }
         },
-        _count: {
-          select: {
-            inspirationPhotos: {
-              where: { active: true }
-            }
-          }
-        }
+        children: includeChildren ? {
+          where: { active: true },
+          orderBy: { displayOrder: 'asc' }
+        } : false
       }
     })
 

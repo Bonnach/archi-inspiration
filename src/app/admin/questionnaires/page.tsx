@@ -34,6 +34,8 @@ interface RoomType {
   active: boolean
   questions: Question[]
   architectId: string
+  parentId: string | null
+  children?: RoomType[]
 }
 
 export default function AdminQuestionnairesPage() {
@@ -54,6 +56,7 @@ export default function AdminQuestionnairesPage() {
   const [selectedRoomTypeId, setSelectedRoomTypeId] = useState<string | null>(null)
   const [editingRoomType, setEditingRoomType] = useState<RoomType | null>(null)
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null)
+  const [parentCategoryId, setParentCategoryId] = useState<string | null>(null) // Pour ajouter un type de pièce dans une catégorie
   
   // Form data
   const [roomTypeForm, setRoomTypeForm] = useState({ name: '', displayOrder: 0 })
@@ -79,13 +82,15 @@ export default function AdminQuestionnairesPage() {
 
   const loadRoomTypes = async (architectId: string) => {
     try {
-      const response = await fetch(`/api/room-types?architectId=${architectId}`)
+      const response = await fetch(`/api/room-types?architectId=${architectId}&includeChildren=true`)
       const data = await response.json()
 
       if (response.ok) {
-        setRoomTypes(data.roomTypes || [])
+        // Filtrer pour ne garder que les catégories principales (parents)
+        const categories = data.roomTypes.filter((rt: RoomType) => rt.parentId === null)
+        setRoomTypes(categories)
         // Expand all rooms by default
-        setExpandedRooms(new Set(data.roomTypes?.map((rt: any) => rt.id) || []))
+        setExpandedRooms(new Set(categories?.map((rt: any) => rt.id) || []))
       }
     } catch (error) {
       console.error('Erreur lors du chargement:', error)
@@ -130,7 +135,8 @@ export default function AdminQuestionnairesPage() {
         body: JSON.stringify({
           ...roomTypeForm,
           name: roomTypeForm.name.trim(),
-          architectId: architect.id
+          architectId: architect.id,
+          parentId: parentCategoryId // Ajouter le parentId si on crée un type de pièce
         })
       })
 
@@ -140,6 +146,7 @@ export default function AdminQuestionnairesPage() {
         await loadRoomTypes(architect.id)
         setShowAddRoomTypeModal(false)
         setRoomTypeForm({ name: '', displayOrder: 0 })
+        setParentCategoryId(null)
       } else {
         alert(data.error || 'Erreur lors de la création')
       }
@@ -311,7 +318,15 @@ export default function AdminQuestionnairesPage() {
 
   // Modal handlers
   const openAddRoomTypeModal = () => {
+    setParentCategoryId(null)
     setRoomTypeForm({ name: '', displayOrder: roomTypes.length })
+    setShowAddRoomTypeModal(true)
+  }
+
+  const openAddChildRoomTypeModal = (categoryId: string) => {
+    const category = roomTypes.find(c => c.id === categoryId)
+    setParentCategoryId(categoryId)
+    setRoomTypeForm({ name: '', displayOrder: category?.children?.length || 0 })
     setShowAddRoomTypeModal(true)
   }
 
@@ -322,14 +337,26 @@ export default function AdminQuestionnairesPage() {
   }
 
   const openAddQuestionModal = (roomTypeId: string) => {
-    const roomType = roomTypes.find(rt => rt.id === roomTypeId)
+    // Chercher dans les catégories et leurs enfants
+    let roomType: RoomType | undefined
+    for (const category of roomTypes) {
+      if (category.id === roomTypeId) {
+        roomType = category
+        break
+      }
+      if (category.children) {
+        roomType = category.children.find(child => child.id === roomTypeId)
+        if (roomType) break
+      }
+    }
+    
     setSelectedRoomTypeId(roomTypeId)
     setQuestionForm({
       questionText: '',
       questionType: 'text',
       options: [''],
       required: true,
-      displayOrder: roomType?.questions.length || 0
+      displayOrder: roomType?.questions?.length || 0
     })
     setShowAddQuestionModal(true)
   }
@@ -399,7 +426,11 @@ export default function AdminQuestionnairesPage() {
                   Gestionnaire de questionnaires
                 </h1>
                 <p className="text-sm text-gray-500">
-                  {roomTypes.length} types de pièces • {roomTypes.reduce((acc, rt) => acc + rt.questions.length, 0)} questions
+                  {roomTypes.length} catégories • 
+                  {roomTypes.reduce((acc, rt) => acc + (rt.children?.length || 0), 0)} types de pièces • 
+                  {roomTypes.reduce((acc, rt) => 
+                    acc + (rt.questions?.length || 0) + (rt.children?.reduce((childAcc, child) => childAcc + (child.questions?.length || 0), 0) || 0)
+                  , 0)} questions
                 </p>
               </div>
             </div>
@@ -410,7 +441,7 @@ export default function AdminQuestionnairesPage() {
                 className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Nouvelle pièce
+                Nouvelle catégorie
               </button>
             </div>
           </div>
@@ -420,44 +451,48 @@ export default function AdminQuestionnairesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {roomTypes.length > 0 ? (
           <div className="space-y-6">
-            {roomTypes.map((roomType) => (
-              <div key={roomType.id} className="bg-white rounded-lg shadow">
-                <div 
-                  className="px-6 py-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
-                  onClick={() => toggleRoom(roomType.id)}
-                >
+            {roomTypes
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+              .map((category) => (
+              <div key={category.id} className="bg-white rounded-lg shadow">
+                {/* Header de la catégorie */}
+                <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                      {expandedRooms.has(roomType.id) ? (
-                        <ChevronDown className="h-5 w-5 text-gray-400 mr-2" />
-                      ) : (
-                        <ChevronRight className="h-5 w-5 text-gray-400 mr-2" />
-                      )}
-                      <Home className="h-5 w-5 text-blue-600 mr-3" />
+                      <Home className="h-6 w-6 text-blue-600 mr-3" />
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {roomType.name}
-                        </h3>
+                        <h2 className="text-xl font-bold text-gray-900">
+                          {category.name}
+                        </h2>
                         <p className="text-sm text-gray-600">
-                          {roomType.questions.length} question{roomType.questions.length > 1 ? 's' : ''}
-                          {!roomType.active && ' • Inactif'}
+                          {category.children?.length || 0} type{(category.children?.length || 0) > 1 ? 's' : ''} de pièce
                         </p>
                       </div>
                     </div>
                     
                     <div className="flex items-center space-x-2">
+                      <button 
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center text-sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openAddChildRoomTypeModal(category.id)
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Ajouter un type de pièce
+                      </button>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        roomType.active 
+                        category.active 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {roomType.active ? 'Actif' : 'Inactif'}
+                        {category.active ? 'Actif' : 'Inactif'}
                       </span>
                       <button 
                         className="p-1 text-gray-400 hover:text-blue-600"
                         onClick={(e) => {
                           e.stopPropagation()
-                          openEditRoomTypeModal(roomType)
+                          openEditRoomTypeModal(category)
                         }}
                       >
                         <Edit className="h-4 w-4" />
@@ -466,7 +501,7 @@ export default function AdminQuestionnairesPage() {
                         className="p-1 text-gray-400 hover:text-red-600"
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleDeleteRoomType(roomType.id)
+                          handleDeleteRoomType(category.id)
                         }}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -475,98 +510,167 @@ export default function AdminQuestionnairesPage() {
                   </div>
                 </div>
 
-                {expandedRooms.has(roomType.id) && (
-                  <div className="px-6 py-4">
-                    {roomType.questions.length > 0 ? (
-                      <div className="space-y-4">
-                        {roomType.questions
-                          .sort((a, b) => a.displayOrder - b.displayOrder)
-                          .map((question, index) => (
-                          <div key={question.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center mb-2">
-                                  <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium mr-3">
-                                    Q{index + 1}
-                                  </span>
-                                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium mr-2">
-                                    {getQuestionTypeLabel(question.questionType)}
-                                  </span>
-                                  {question.required && (
-                                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-medium">
-                                      Obligatoire
-                                    </span>
-                                  )}
-                                </div>
-                                
-                                <p className="text-gray-900 font-medium mb-2">
-                                  {question.questionText}
-                                </p>
-                                
-                                {question.optionsJson && (
-                                  <div className="flex flex-wrap gap-2">
-                                    {JSON.parse(question.optionsJson).map((option: string, optIndex: number) => (
-                                      <span
-                                        key={optIndex}
-                                        className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs"
-                                      >
-                                        {option}
-                                      </span>
-                                    ))}
-                                  </div>
+                {/* Liste des types de pièces dans cette catégorie */}
+                <div className="p-4">
+                  {category.children && category.children.length > 0 ? (
+                    <div className="space-y-4">
+                      {category.children
+                        .sort((a, b) => a.displayOrder - b.displayOrder)
+                        .map((roomType) => (
+                        <div key={roomType.id} className="border border-gray-200 rounded-lg">
+                          <div 
+                            className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                            onClick={() => toggleRoom(roomType.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center flex-1">
+                                {expandedRooms.has(roomType.id) ? (
+                                  <ChevronDown className="h-5 w-5 text-gray-400 mr-2 flex-shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-5 w-5 text-gray-400 mr-2 flex-shrink-0" />
                                 )}
+                                <div className="flex-1">
+                                  <h3 className="text-base font-semibold text-gray-900">
+                                    {roomType.name}
+                                  </h3>
+                                  <p className="text-sm text-gray-600">
+                                    {roomType.questions?.length || 0} question{(roomType.questions?.length || 0) > 1 ? 's' : ''}
+                                    {!roomType.active && ' • Inactif'}
+                                  </p>
+                                </div>
                               </div>
                               
-                              <div className="flex items-center space-x-2 ml-4">
+                              <div className="flex items-center space-x-2">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  question.active 
+                                  roomType.active 
                                     ? 'bg-green-100 text-green-800' 
                                     : 'bg-gray-100 text-gray-800'
                                 }`}>
-                                  {question.active ? 'Active' : 'Inactive'}
+                                  {roomType.active ? 'Actif' : 'Inactif'}
                                 </span>
                                 <button 
                                   className="p-1 text-gray-400 hover:text-blue-600"
-                                  onClick={() => openEditQuestionModal(question)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openEditRoomTypeModal(roomType)
+                                  }}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </button>
                                 <button 
                                   className="p-1 text-gray-400 hover:text-red-600"
-                                  onClick={() => handleDeleteQuestion(question.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteRoomType(roomType.id)
+                                  }}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               </div>
                             </div>
                           </div>
-                        ))}
-                        
-                        <button 
-                          onClick={() => openAddQuestionModal(roomType.id)}
-                          className="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-gray-600 hover:border-gray-400 hover:text-gray-700 flex items-center justify-center"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Ajouter une question à {roomType.name}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-3" />
-                        <p className="text-gray-600 mb-4">
-                          Aucune question pour {roomType.name}
-                        </p>
-                        <button 
-                          onClick={() => openAddQuestionModal(roomType.id)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center mx-auto"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Ajouter la première question
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+
+                          {expandedRooms.has(roomType.id) && (
+                            <div className="px-4 pb-4 bg-gray-50">
+                              {roomType.questions && roomType.questions.length > 0 ? (
+                                <div className="space-y-3">
+                                  {roomType.questions
+                                    .sort((a, b) => a.displayOrder - b.displayOrder)
+                                    .map((question, index) => (
+                                    <div key={question.id} className="bg-white border border-gray-200 rounded-lg p-3">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center mb-2">
+                                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium mr-2">
+                                              Q{index + 1}
+                                            </span>
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium mr-2">
+                                              {getQuestionTypeLabel(question.questionType)}
+                                            </span>
+                                            {question.required && (
+                                              <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-medium">
+                                                Obligatoire
+                                              </span>
+                                            )}
+                                          </div>
+                                          
+                                          <p className="text-gray-900 font-medium mb-2">
+                                            {question.questionText}
+                                          </p>
+                                          
+                                          {question.optionsJson && (
+                                            <div className="flex flex-wrap gap-2">
+                                              {JSON.parse(question.optionsJson).map((option: string, optIndex: number) => (
+                                                <span
+                                                  key={optIndex}
+                                                  className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs"
+                                                >
+                                                  {option}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="flex items-center space-x-2 ml-4">
+                                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            question.active 
+                                              ? 'bg-green-100 text-green-800' 
+                                              : 'bg-gray-100 text-gray-800'
+                                          }`}>
+                                            {question.active ? 'Active' : 'Inactive'}
+                                          </span>
+                                          <button 
+                                            className="p-1 text-gray-400 hover:text-blue-600"
+                                            onClick={() => openEditQuestionModal(question)}
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </button>
+                                          <button 
+                                            className="p-1 text-gray-400 hover:text-red-600"
+                                            onClick={() => handleDeleteQuestion(question.id)}
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  
+                                  <button 
+                                    onClick={() => openAddQuestionModal(roomType.id)}
+                                    className="w-full border-2 border-dashed border-gray-300 rounded-lg p-3 text-gray-600 hover:border-gray-400 hover:text-gray-700 flex items-center justify-center bg-white"
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Ajouter une question à {roomType.name}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-center py-6">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+                                  <p className="text-gray-600 mb-4">
+                                    Aucune question pour {roomType.name}
+                                  </p>
+                                  <button 
+                                    onClick={() => openAddQuestionModal(roomType.id)}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center mx-auto"
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Ajouter la première question
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>Aucun type de pièce dans cette catégorie</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -595,26 +699,39 @@ export default function AdminQuestionnairesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Nouveau type de pièce</h3>
+              <h3 className="text-lg font-semibold">
+                {parentCategoryId ? 'Nouveau type de pièce' : 'Nouvelle catégorie'}
+              </h3>
               <button 
-                onClick={() => setShowAddRoomTypeModal(false)}
+                onClick={() => {
+                  setShowAddRoomTypeModal(false)
+                  setParentCategoryId(null)
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
+            {parentCategoryId && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  Sera ajouté dans la catégorie : <strong>{roomTypes.find(c => c.id === parentCategoryId)?.name}</strong>
+                </p>
+              </div>
+            )}
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nom du type de pièce *
+                  Nom {parentCategoryId ? 'du type de pièce' : 'de la catégorie'} *
                 </label>
                 <input
                   type="text"
                   value={roomTypeForm.name}
                   onChange={(e) => setRoomTypeForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="Ex: Salon, Cuisine, Chambre..."
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-400"
+                  placeholder={parentCategoryId ? 'Ex: Salon, Cuisine, Chambre...' : 'Ex: Intérieur, Extérieur...'}
                 />
               </div>
 
@@ -626,7 +743,7 @@ export default function AdminQuestionnairesPage() {
                   type="number"
                   value={roomTypeForm.displayOrder}
                   onChange={(e) => setRoomTypeForm(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900"
                 />
               </div>
             </div>
@@ -678,7 +795,7 @@ export default function AdminQuestionnairesPage() {
                   type="text"
                   value={roomTypeForm.name}
                   onChange={(e) => setRoomTypeForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-400"
                 />
               </div>
 
@@ -690,7 +807,7 @@ export default function AdminQuestionnairesPage() {
                   type="number"
                   value={roomTypeForm.displayOrder}
                   onChange={(e) => setRoomTypeForm(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900"
                 />
               </div>
             </div>
@@ -741,7 +858,7 @@ export default function AdminQuestionnairesPage() {
                 <textarea
                   value={questionForm.questionText}
                   onChange={(e) => setQuestionForm(prev => ({ ...prev, questionText: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-400"
                   rows={3}
                   placeholder="Posez votre question..."
                 />
@@ -759,7 +876,7 @@ export default function AdminQuestionnairesPage() {
                       questionType: e.target.value as Question['questionType'],
                       options: ['select', 'multiselect', 'radio', 'checkbox'].includes(e.target.value) ? [''] : []
                     }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900"
                   >
                     <option value="text">Texte libre</option>
                     <option value="textarea">Texte long</option>
@@ -780,7 +897,7 @@ export default function AdminQuestionnairesPage() {
                     type="number"
                     value={questionForm.displayOrder}
                     onChange={(e) => setQuestionForm(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900"
                   />
                 </div>
               </div>
@@ -810,7 +927,7 @@ export default function AdminQuestionnairesPage() {
                           type="text"
                           value={option}
                           onChange={(e) => updateOption(index, e.target.value)}
-                          className="flex-1 border border-gray-300 rounded-md px-3 py-2"
+                          className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-400"
                           placeholder={`Option ${index + 1}`}
                         />
                         {questionForm.options.length > 1 && (
@@ -881,7 +998,7 @@ export default function AdminQuestionnairesPage() {
                 <textarea
                   value={questionForm.questionText}
                   onChange={(e) => setQuestionForm(prev => ({ ...prev, questionText: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-400"
                   rows={3}
                 />
               </div>
@@ -900,7 +1017,7 @@ export default function AdminQuestionnairesPage() {
                         ? (prev.options.length > 0 ? prev.options : ['']) 
                         : []
                     }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900"
                   >
                     <option value="text">Texte libre</option>
                     <option value="textarea">Texte long</option>
@@ -921,7 +1038,7 @@ export default function AdminQuestionnairesPage() {
                     type="number"
                     value={questionForm.displayOrder}
                     onChange={(e) => setQuestionForm(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900"
                   />
                 </div>
               </div>
@@ -951,7 +1068,7 @@ export default function AdminQuestionnairesPage() {
                           type="text"
                           value={option}
                           onChange={(e) => updateOption(index, e.target.value)}
-                          className="flex-1 border border-gray-300 rounded-md px-3 py-2"
+                          className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder:text-gray-400"
                           placeholder={`Option ${index + 1}`}
                         />
                         {questionForm.options.length > 1 && (

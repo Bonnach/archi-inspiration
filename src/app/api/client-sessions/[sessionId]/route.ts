@@ -57,11 +57,7 @@ export async function GET(
         },
         photoInteractions: {
           include: {
-            photo: {
-              include: {
-                roomType: true
-              }
-            }
+            photo: true
           },
           orderBy: {
             createdAt: 'asc'

@@ -5,10 +5,27 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const architectId = searchParams.get('architectId')
+    const sessionId = searchParams.get('sessionId')
+    const selectedRoomIds = searchParams.get('selectedRoomIds') // JSON array string
 
+    // Si sessionId est fourni, retourner toutes les photos de cette session (y compris uploads clients)
+    if (sessionId) {
+      const photos = await prisma.inspirationPhoto.findMany({
+        where: {
+          sessionId,
+          active: true
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      })
+      return NextResponse.json({ photos })
+    }
+
+    // Sinon, comportement normal (photos de l'architecte)
     if (!architectId) {
       return NextResponse.json(
-        { error: 'ID architecte requis' },
+        { error: 'ID architecte ou sessionId requis' },
         { status: 400 }
       )
     }
@@ -16,14 +33,26 @@ export async function GET(request: NextRequest) {
     const photos = await prisma.inspirationPhoto.findMany({
       where: {
         architectId,
-        active: true
+        active: true,
+        isClientUpload: false // Ne retourner que les photos admin, pas les uploads clients
       },
       orderBy: {
         createdAt: 'desc'
       }
     })
 
-    return NextResponse.json({ photos })
+    // Filtrer par pièces sélectionnées si fourni
+    let filteredPhotos = photos
+    if (selectedRoomIds) {
+      const roomIdsArray = JSON.parse(selectedRoomIds)
+      filteredPhotos = photos.filter(photo => {
+        if (!photo.roomTypeIds) return true // Photos sans pièce = affichées à tous
+        const photoRoomIds = JSON.parse(photo.roomTypeIds)
+        return photoRoomIds.some((roomId: string) => roomIdsArray.includes(roomId))
+      })
+    }
+
+    return NextResponse.json({ photos: filteredPhotos })
 
   } catch (error) {
     console.error('Erreur lors de la récupération des photos:', error)
@@ -36,16 +65,27 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { architectId, roomTypeId, imageUrl, title, description, tags } = await request.json()
+    const { 
+      architectId, 
+      sessionId,
+      roomTypeIds, 
+      imageUrl, 
+      title, 
+      description, 
+      tags,
+      isClientUpload = false
+    } = await request.json()
 
     const photo = await prisma.inspirationPhoto.create({
       data: {
         architectId,
-        roomTypeId,
+        sessionId,
+        roomTypeIds: roomTypeIds && roomTypeIds.length > 0 ? JSON.stringify(roomTypeIds) : null,
         imageUrl,
         title,
         description,
-        tags: tags ? JSON.stringify(tags) : null
+        tags: tags ? JSON.stringify(tags) : null,
+        isClientUpload
       }
     })
 

@@ -47,6 +47,7 @@ export default function ResultsPage({ params }: ResultsPageProps) {
   const [session, setSession] = useState<ClientSession | null>(null)
   const [answers, setAnswers] = useState<Answer[]>([])
   const [likedPhotos, setLikedPhotos] = useState<PhotoInteraction[]>([])
+  const [clientPhotos, setClientPhotos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -79,6 +80,15 @@ export default function ResultsPage({ params }: ResultsPageProps) {
       if (interactionsResponse.ok) {
         const liked = interactionsData.interactions?.filter((i: any) => i.action === 'like') || []
         setLikedPhotos(liked)
+      }
+
+      // Charger les photos uploadées par le client
+      const photosResponse = await fetch(`/api/inspiration-photos?sessionId=${sessionId}`)
+      const photosData = await photosResponse.json()
+
+      if (photosResponse.ok) {
+        const uploaded = photosData.photos?.filter((p: any) => p.isClientUpload) || []
+        setClientPhotos(uploaded)
       }
 
     } catch (error) {
@@ -176,6 +186,33 @@ export default function ResultsPage({ params }: ResultsPageProps) {
               </div>
             ))}
           </div>
+
+          {/* Photos uploadées par le client */}
+          {clientPhotos.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6 mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                <User className="h-5 w-5 text-indigo-600 mr-2" />
+                Vos photos personnelles ({clientPhotos.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {clientPhotos.map((photo) => (
+                  <div key={photo.id} className="relative group">
+                    <div className="relative h-48 rounded-lg overflow-hidden">
+                      <Image
+                        src={photo.imageUrl}
+                        alt={photo.title || 'Votre photo'}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                    </div>
+                    {photo.title && (
+                      <p className="mt-2 text-sm text-gray-700">{photo.title}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Photos aimées */}
           {likedPhotos.length > 0 && (

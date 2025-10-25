@@ -56,6 +56,7 @@ export default function SessionPage({ params }: SessionPageProps) {
   const { sessionId } = React.use(params)
   const [architect, setArchitect] = useState<any>(null)
   const [session, setSession] = useState<ClientSession | null>(null)
+  const [clientPhotos, setClientPhotos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [pdfLoading, setPdfLoading] = useState(false)
 
@@ -79,6 +80,15 @@ export default function SessionPage({ params }: SessionPageProps) {
       if (response.ok) {
         const currentSession = data.sessions?.find((s: any) => s.id === sessionId)
         setSession(currentSession || null)
+      }
+
+      // Charger les photos uploadées par le client
+      const photosResponse = await fetch(`/api/inspiration-photos?sessionId=${sessionId}`)
+      const photosData = await photosResponse.json()
+
+      if (photosResponse.ok) {
+        const uploaded = photosData.photos?.filter((p: any) => p.isClientUpload) || []
+        setClientPhotos(uploaded)
       }
     } catch (error) {
       console.error('Erreur lors du chargement:', error)
@@ -287,6 +297,38 @@ export default function SessionPage({ params }: SessionPageProps) {
               Préférences visuelles
             </h2>
             
+            {/* Photos personnelles uploadées */}
+            {clientPhotos.length > 0 && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center">
+                  <User className="h-4 w-4 text-indigo-600 mr-2" />
+                  Photos personnelles ({clientPhotos.length})
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {clientPhotos.map((photo) => (
+                    <div key={photo.id} className="border rounded-lg overflow-hidden">
+                      <div className="relative h-32">
+                        <Image
+                          src={photo.imageUrl}
+                          alt={photo.title || 'Photo personnelle'}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      {photo.title && (
+                        <div className="p-3">
+                          <h4 className="font-medium text-gray-900 text-sm">
+                            {photo.title}
+                          </h4>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Photos aimées */}
             {likedPhotos.length > 0 && (
               <div className="bg-white rounded-lg shadow p-6">

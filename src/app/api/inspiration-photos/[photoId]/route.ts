@@ -6,7 +6,7 @@ export async function DELETE(
   { params }: { params: { photoId: string } }
 ) {
   try {
-    const { photoId } = params
+    const { photoId } = await params
 
     // Supprimer la photo (soft delete en mettant active à false)
     const photo = await prisma.inspirationPhoto.update({
@@ -33,16 +33,17 @@ export async function PUT(
   { params }: { params: { photoId: string } }
 ) {
   try {
-    const { photoId } = params
-    const { title, description, tags, roomTypeId, active } = await request.json()
+    const { photoId } = await params
+    const { imageUrl, title, description, tags, roomTypeIds, active } = await request.json()
 
     const photo = await prisma.inspirationPhoto.update({
       where: { id: photoId },
       data: {
+        imageUrl,
         title,
         description,
         tags: tags ? JSON.stringify(tags) : null,
-        roomTypeId: roomTypeId || null,
+        roomTypeIds: roomTypeIds && roomTypeIds.length > 0 ? JSON.stringify(roomTypeIds) : null,
         active: active !== undefined ? active : true
       }
     })

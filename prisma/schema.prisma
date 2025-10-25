@@ -28,15 +28,29 @@ model Architect {
 }
 
 model ClientSession {
-  id          String   @id @default(cuid())
-  firstName   String
-  lastName    String
-  email       String
-  architectId String
-  status      String   @default("in_progress") // in_progress, completed, abandoned
-  createdAt   DateTime @default(now())
-  completedAt DateTime?
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  firstName          String
+  lastName           String
+  email              String
+  architectId        String
+  selectedRoomTypes  String? // JSON array of room type IDs selected by client
+  status             String   @default("in_progress") // in_progress, completed, abandoned
+  createdAt          DateTime @default(now())
+  completedAt        DateTime?
+  updatedAt          DateTime @updatedAt
+  
+  // General project information
+  projectType        String? // construction, renovation, extension, remodeling
+  housingType        String? // house, apartment, other
+  housingTypeOther   String?
+  propertyUsage      String? // primary, secondary, rental
+  householdAdults    Int?
+  householdChildren  Int?
+  householdGrandchildren Int?
+  childrenAges       String?
+  hasAnimals         Boolean?
+  desiredOrganization String? // single_story, multi_story, extension, elevation, unsure
+  organizationComments String?
 
   // Relations
   architect          Architect           @relation(fields: [architectId], references: [id], onDelete: Cascade)
@@ -47,16 +61,18 @@ model ClientSession {
 }
 
 model RoomType {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   name         String
-  displayOrder Int    @default(0)
+  displayOrder Int     @default(0)
   architectId  String
+  parentId     String? // Pour la hiérarchie (null = catégorie principale)
   active       Boolean @default(true)
 
   // Relations
-  architect         Architect          @relation(fields: [architectId], references: [id], onDelete: Cascade)
-  questions         Question[]
-  inspirationPhotos InspirationPhoto[]
+  architect Architect   @relation(fields: [architectId], references: [id], onDelete: Cascade)
+  questions Question[]
+  parent    RoomType?   @relation("RoomHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  RoomType[]  @relation("RoomHierarchy")
 
   @@map("room_types")
 }
@@ -96,17 +112,18 @@ model ClientAnswer {
 model InspirationPhoto {
   id          String   @id @default(cuid())
   architectId String
-  roomTypeId  String?
+  sessionId   String?  // Pour les photos uploadées par le client
+  roomTypeIds String?  // JSON array of room type IDs
   imageUrl    String
   title       String?
   description String?
-  tags        String? // JSON array of tags
+  tags        String?  // JSON array of tags
   active      Boolean  @default(true)
+  isClientUpload Boolean @default(false) // true si uploadée par le client
   createdAt   DateTime @default(now())
 
   // Relations
   architect         Architect          @relation(fields: [architectId], references: [id], onDelete: Cascade)
-  roomType          RoomType?          @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
   photoInteractions PhotoInteraction[]
 
   @@map("inspiration_photos")

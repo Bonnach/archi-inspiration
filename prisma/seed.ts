@@ -1,192 +1,101 @@
 import { PrismaClient } from '@prisma/client'
-import { hashPassword } from '../src/lib/auth'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  // Créer un architecte de démonstration
-  const demoArchitect = await prisma.architect.create({
-    data: {
+  console.log('🌱 Début du seed...')
+
+  // 1. Créer un architecte de démo
+  const architect = await prisma.architect.upsert({
+    where: { email: 'demo@architecte.fr' },
+    update: {},
+    create: {
       id: 'demo-architect-id',
-      email: 'demo@architecte.com',
-      password: await hashPassword('demo123'),
+      email: 'demo@architecte.fr',
+      password: '$2a$10$YourHashedPasswordHere',
       name: 'Architecte Démo',
-      company: 'Studio Démo'
+      company: 'Cabinet d Architecture Démo'
     }
   })
+  console.log('✅ Architecte créé:', architect.name)
 
-  console.log('✅ Architecte démo créé:', demoArchitect.name)
-
-  // Créer les types de pièces
-  const roomTypes = [
-    { name: 'Salon', displayOrder: 1 },
-    { name: 'Cuisine', displayOrder: 2 },
-    { name: 'Salle de bain', displayOrder: 3 },
-    { name: 'Chambre', displayOrder: 4 }
+  // 2. Créer les catégories basées sur le markdown
+  const categories = [
+    { name: '🏡 Espaces de vie', children: ['Entrée / hall', 'Salon', 'Séjour', 'Salle à manger', 'Cuisine ouverte', 'Cuisine fermée', 'Coin repas', 'Véranda / jardin d hiver', 'Pièce de réception', 'Salle de jeux / salle TV', 'Bibliothèque', 'Home cinéma'] },
+    { name: '🛏️ Espaces nuit', children: ['Chambre principale', 'Suite parentale (avec salle d eau / dressing)', 'Chambre d amis', 'Chambre d enfant', 'Chambre d adolescent', 'Dortoir (gîte / maison secondaire)', 'Mezzanine / coin nuit'] },
+    { name: '🛁 Espaces d eau', children: ['Salle de bains principale', 'Salle d eau', 'Douche d appoint', 'WC indépendant', 'Buanderie / lingerie', 'Espace bien-être (sauna, hammam, jacuzzi)'] },
+    { name: '🧑‍💼 Espaces de travail / techniques', children: ['Bureau principal', 'Bureau d appoint', 'Atelier (créatif, bricolage, peinture…)', 'Studio musique / son / vidéo', 'Salle informatique / gaming room', 'Local technique (chaufferie, PAC, ballon, etc.)'] },
+    { name: '🍷 Espaces de stockage et annexes', children: ['Cellier / garde-manger', 'Arrière-cuisine', 'Cave à vin', 'Cave alimentaire', 'Grenier / combles', 'Dressing indépendant', 'Placards sous escalier', 'Réserve / débarras', 'Local jardin / abri'] },
+    { name: '🚗 Espaces extérieurs', children: ['Terrasse', 'Balcon', 'Patio / cour intérieure', 'Jardin', 'Cuisine d extérieur', 'Abri de jardin', 'Piscine', 'Pool house', 'Spa extérieur', 'Carport', 'Garage', 'Abri à vélos / local technique extérieur'] },
+    { name: '🏘️ Espaces spécifiques', children: ['Studio indépendant (location, ado, télétravail)', 'Chambre d hôtes / gîte', 'Atelier professionnel / boutique', 'Salle de sport / fitness', 'Salle de danse / yoga', 'Salle de musique', 'Salle de réception / banquet', 'Galerie d art / exposition', 'Orangerie / serre', 'Chapelle / espace spirituel', 'Chambre de service', 'Logement du personnel'] }
   ]
 
-  for (const roomType of roomTypes) {
-    const createdRoomType = await prisma.roomType.create({
+  for (let catIndex = 0; catIndex < categories.length; catIndex++) {
+    const cat = categories[catIndex]
+    const category = await prisma.roomType.create({
       data: {
-        ...roomType,
-        architectId: demoArchitect.id
+        name: cat.name,
+        displayOrder: catIndex,
+        architectId: architect.id,
+        parentId: null
       }
     })
 
-    console.log(`✅ Type de pièce créé: ${createdRoomType.name}`)
-
-    // Créer les questions pour chaque type de pièce
-    const questions = getQuestionsForRoomType(roomType.name)
-    
-    for (let i = 0; i < questions.length; i++) {
-      await prisma.question.create({
+    for (let i = 0; i < cat.children.length; i++) {
+      await prisma.roomType.create({
         data: {
-          ...questions[i],
-          roomTypeId: createdRoomType.id,
-          displayOrder: i + 1
+          name: cat.children[i],
+          displayOrder: i,
+          architectId: architect.id,
+          parentId: category.id
         }
       })
     }
-
-    console.log(`✅ ${questions.length} questions créées pour ${roomType.name}`)
+    console.log(`✅ ${cat.children.length} types de pièces créés pour ${cat.name}`)
   }
 
-  // Créer quelques photos d'inspiration d'exemple
-  const samplePhotos = [
-    {
-      imageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop',
-      title: 'Salon moderne minimaliste',
-      description: 'Un salon épuré aux lignes modernes',
-      tags: JSON.stringify(['moderne', 'minimaliste', 'lumineux'])
-    },
-    {
-      imageUrl: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&h=600&fit=crop',
-      title: 'Cuisine ouverte contemporaine',
-      description: 'Cuisine avec îlot central et finitions haut de gamme',
-      tags: JSON.stringify(['contemporain', 'îlot', 'ouvert'])
-    },
-    {
-      imageUrl: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=800&h=600&fit=crop',
-      title: 'Salle de bain zen',
-      description: 'Salle de bain aux inspirations naturelles',
-      tags: JSON.stringify(['zen', 'naturel', 'relaxant'])
-    }
-  ]
-
-  for (const photo of samplePhotos) {
-    await prisma.inspirationPhoto.create({
-      data: {
-        ...photo,
-        architectId: demoArchitect.id
-      }
+  // 3. Ajouter des questions pour certaines pièces populaires
+  const salon = await prisma.roomType.findFirst({ where: { name: 'Salon', architectId: architect.id } })
+  if (salon) {
+    await prisma.question.createMany({
+      data: [
+        { roomTypeId: salon.id, questionText: 'Quelle ambiance souhaitez-vous pour votre salon ?', questionType: 'select', optionsJson: JSON.stringify(['Cosy et chaleureux', 'Moderne et épuré', 'Classique et élégant', 'Industriel', 'Scandinave']), required: true, displayOrder: 0 },
+        { roomTypeId: salon.id, questionText: 'Combien de personnes doivent pouvoir s asseoir confortablement ?', questionType: 'number', required: false, displayOrder: 1 },
+        { roomTypeId: salon.id, questionText: 'Fonctions principales du salon', questionType: 'multiselect', optionsJson: JSON.stringify(['Détente', 'Réception d invités', 'Lecture', 'Regarder la TV', 'Jeux en famille']), required: true, displayOrder: 2 }
+      ]
     })
+    console.log('✅ Questions pour Salon')
   }
 
-  console.log(`✅ ${samplePhotos.length} photos d'inspiration créées`)
-}
-
-function getQuestionsForRoomType(roomTypeName: string) {
-  switch (roomTypeName) {
-    case 'Salon':
-      return [
-        {
-          questionText: 'Quel style préférez-vous pour votre salon ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Contemporain', 'Classique', 'Industriel', 'Scandinave', 'Bohème']),
-          required: true
-        },
-        {
-          questionText: 'Comment souhaitez-vous disposer votre salon ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Canapé face TV', 'Salon de conversation', 'Configuration modulaire', 'Espace ouvert']),
-          required: true
-        },
-        {
-          questionText: 'Quels matériaux vous attirent le plus ?',
-          questionType: 'multiple',
-          optionsJson: JSON.stringify(['Bois', 'Métal', 'Tissus naturels', 'Cuir', 'Pierre', 'Verre']),
-          required: false
-        }
+  const cuisine = await prisma.roomType.findFirst({ where: { name: 'Cuisine ouverte', architectId: architect.id } })
+  if (cuisine) {
+    await prisma.question.createMany({
+      data: [
+        { roomTypeId: cuisine.id, questionText: 'Quel type d aménagement préférez-vous ?', questionType: 'select', optionsJson: JSON.stringify(['Linéaire', 'En L', 'En U', 'Avec îlot central', 'En parallèle']), required: true, displayOrder: 0 },
+        { roomTypeId: cuisine.id, questionText: 'Style de cuisine souhaité', questionType: 'select', optionsJson: JSON.stringify(['Moderne', 'Traditionnelle', 'Campagnarde', 'Industrielle', 'Contemporaine']), required: true, displayOrder: 1 }
       ]
-
-    case 'Cuisine':
-      return [
-        {
-          questionText: 'Quelle configuration de cuisine préférez-vous ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Linéaire', 'En L', 'En U', 'Avec îlot central', 'Ouverte sur le salon']),
-          required: true
-        },
-        {
-          questionText: 'Quel style de façades vous plaît ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Moderne laquée', 'Bois naturel', 'Industrielle', 'Classique', 'Minimaliste']),
-          required: true
-        },
-        {
-          questionText: 'Quel niveau d\'équipement souhaitez-vous ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Électroménager standard', 'Haut de gamme', 'Encastrable intégral', 'Professionnel']),
-          required: true
-        }
-      ]
-
-    case 'Salle de bain':
-      return [
-        {
-          questionText: 'Quel type de douche préférez-vous ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Douche à l\'italienne', 'Cabine de douche', 'Baignoire-douche', 'Douche et baignoire séparées']),
-          required: true
-        },
-        {
-          questionText: 'Combien de vasques souhaitez-vous ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Une vasque simple', 'Double vasques', 'Selon l\'espace disponible']),
-          required: true
-        },
-        {
-          questionText: 'Quel style d\'ambiance recherchez-vous ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Moderne', 'Zen et naturel', 'Classique', 'Industriel', 'Luxe']),
-          required: true
-        }
-      ]
-
-    case 'Chambre':
-      return [
-        {
-          questionText: 'Quelle ambiance souhaitez-vous pour votre chambre ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Cocooning', 'Minimaliste', 'Romantique', 'Moderne', 'Bohème']),
-          required: true
-        },
-        {
-          questionText: 'Quel type de rangements préférez-vous ?',
-          questionType: 'select',
-          optionsJson: JSON.stringify(['Dressing séparé', 'Placards intégrés', 'Meubles libres', 'Rangements sous le lit']),
-          required: true
-        },
-        {
-          questionText: 'Quel éclairage privilégiez-vous ?',
-          questionType: 'multiple',
-          optionsJson: JSON.stringify(['Éclairage tamisé', 'Lumière naturelle', 'Éclairage fonctionnel', 'Lampes d\'ambiance']),
-          required: false
-        }
-      ]
-
-    default:
-      return []
+    })
+    console.log('✅ Questions pour Cuisine')
   }
+
+  const chambre = await prisma.roomType.findFirst({ where: { name: 'Chambre principale', architectId: architect.id } })
+  if (chambre) {
+    await prisma.question.createMany({
+      data: [
+        { roomTypeId: chambre.id, questionText: 'Ambiance recherchée', questionType: 'select', optionsJson: JSON.stringify(['Zen et apaisante', 'Lumineuse', 'Cocooning', 'Minimaliste', 'Romantique']), required: true, displayOrder: 0 }
+      ]
+    })
+    console.log('✅ Questions pour Chambre')
+  }
+
+  console.log('✨ Seed terminé!')
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect()
-    console.log('🎉 Base de données initialisée avec succès!')
-  })
-  .catch(async (e) => {
-    console.error('❌ Erreur lors de l\'initialisation:', e)
-    await prisma.$disconnect()
+  .catch((e) => {
+    console.error('❌ Erreur:', e)
     process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
   })
