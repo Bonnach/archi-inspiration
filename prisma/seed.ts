@@ -5,19 +5,33 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🌱 Début du seed...')
 
-  // 1. Créer un architecte de démo
+  // 1. Créer un architecte de démo (.fr)
   const architect = await prisma.architect.upsert({
     where: { email: 'demo@architecte.fr' },
     update: {},
     create: {
       id: 'demo-architect-id',
       email: 'demo@architecte.fr',
-      password: '$2a$10$YourHashedPasswordHere',
+      password: '$2b$10$NjLW32iDXjlRFKNsRJZDJuBQRV2cVt.rrKavcU5jA.RpB4Vg5iSda', // demo123
       name: 'Architecte Démo',
       company: 'Cabinet d Architecture Démo'
     }
   })
-  console.log('✅ Architecte créé:', architect.name)
+  console.log('✅ Architecte créé (.fr):', architect.name)
+
+  // 1bis. Créer aussi demo@architecte.com
+  const architect2 = await prisma.architect.upsert({
+    where: { email: 'demo@architecte.com' },
+    update: {},
+    create: {
+      id: 'demo-architect-com-id',
+      email: 'demo@architecte.com',
+      password: '$2b$10$NjLW32iDXjlRFKNsRJZDJuBQRV2cVt.rrKavcU5jA.RpB4Vg5iSda', // demo123
+      name: 'Architecte Démo',
+      company: 'Cabinet d Architecture Démo'
+    }
+  })
+  console.log('✅ Architecte créé (.com):', architect2.name)
 
   // 2. Créer les catégories basées sur le markdown
   const categories = [
